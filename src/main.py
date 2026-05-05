@@ -10,9 +10,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
-HEADER_FILL = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
+HEADER_FILL = PatternFill(start_color="00AD32", end_color="00AD32", fill_type="solid")
 NULL_FILL = PatternFill(start_color="FFD7D7", end_color="FFD7D7", fill_type="solid")
-FOOTER_FILL = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
+FOOTER_FILL = PatternFill(start_color="C9EAB8", end_color="C9EAB8", fill_type="solid")
 THIN = Side(style="thin")
 CELL_BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
@@ -116,7 +116,7 @@ def process_csv(csv_path: str, output_dir: str = OUTPUT_DIR) -> str:
             f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         ),
         FOOTER_FILL,
-        Font(bold=True, color="1F4E79", size=11),
+        Font(bold=True, color="005C1A", size=11),
     )
 
     alerts = _find_null_alerts(df)
