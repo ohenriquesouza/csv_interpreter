@@ -4,6 +4,20 @@ Converts messy CSV files into clean, formatted Excel spreadsheets (.xlsx).
 
 ---
 
+## 📸 Example
+
+> Blur was applied to the images below to prevent data leakage.
+
+**Before** — raw CSV, no formatting:
+
+![Raw CSV](img/bluredcru.png)
+
+**After** — processed and formatted spreadsheet:
+
+![Formatted Excel](img/bluredarrumado.png)
+
+---
+
 ## 🖥️ Desktop App (recommended)
 
 Just run `CSVInterpreter.exe` — no Python or dependencies required.
