@@ -25,15 +25,18 @@ def select_file(label: tk.Label, btn_process: tk.Button, state: dict) -> None:
         btn_process.config(state=tk.NORMAL)
 
 
-def run_processing(csv_path: str, dest_dir: str, btn_process: tk.Button, status: tk.Label) -> None:
+def run_processing(
+    csv_path: str, dest_dir: str, protect: bool,
+    btn_process: tk.Button, status: tk.Label,
+) -> None:
     try:
         tmp_dir = tempfile.mkdtemp()
         tmp_csv = os.path.join(tmp_dir, os.path.basename(csv_path))
         shutil.copy2(csv_path, tmp_csv)
 
-        out_xlsx = process_csv(tmp_csv, output_dir=dest_dir)
+        out_xlsx = process_csv(tmp_csv, output_dir=dest_dir, protect=protect)
 
-        status.config(text=f"Arquivo gerado com sucesso!", fg="#2e7d32")
+        status.config(text="Arquivo gerado com sucesso!", fg="#2e7d32")
         messagebox.showinfo("Concluído", f"Arquivo salvo em:\n{out_xlsx}")
     except Exception as exc:
         status.config(text="Erro ao processar.", fg="#c62828")
@@ -43,7 +46,7 @@ def run_processing(csv_path: str, dest_dir: str, btn_process: tk.Button, status:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def process(state: dict, btn_process: tk.Button, status: tk.Label) -> None:
+def process(state: dict, protect_var: tk.BooleanVar, btn_process: tk.Button, status: tk.Label) -> None:
     csv_path = state.get("csv_path")
     if not csv_path:
         return
@@ -57,7 +60,7 @@ def process(state: dict, btn_process: tk.Button, status: tk.Label) -> None:
 
     thread = threading.Thread(
         target=run_processing,
-        args=(csv_path, dest_dir, btn_process, status),
+        args=(csv_path, dest_dir, protect_var.get(), btn_process, status),
         daemon=True,
     )
     thread.start()
@@ -100,14 +103,26 @@ def main() -> None:
     )
     btn_select.pack()
 
+    protect_var = tk.BooleanVar(value=False)
+
+    action_frame = tk.Frame(root, bg="white")
+    action_frame.pack(pady=(10, 0))
+
     btn_process = tk.Button(
-        root, text="Processar e salvar",
+        action_frame, text="Processar e salvar",
         font=("Segoe UI", 10), bg="#e0e0e0", fg="#aaaaaa",
         relief=tk.FLAT, padx=16, pady=6, cursor="hand2",
         state=tk.DISABLED,
-        command=lambda: process(state, btn_process, status_label),
+        command=lambda: process(state, protect_var, btn_process, status_label),
     )
-    btn_process.pack(pady=(10, 0))
+    btn_process.pack(side=tk.LEFT)
+
+    chk_protect = tk.Checkbutton(
+        action_frame, text="🔒", variable=protect_var,
+        font=("Segoe UI", 12), bg="white", activebackground="white",
+        cursor="hand2", borderwidth=0,
+    )
+    chk_protect.pack(side=tk.LEFT, padx=(8, 0))
 
     btn_process.bind("<Enter>", lambda e: btn_process.config(
         bg="#43a047", fg="white") if btn_process["state"] == tk.NORMAL else None)

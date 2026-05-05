@@ -54,7 +54,7 @@ def _find_null_alerts(df: pd.DataFrame, threshold: int = 10) -> list[str]:
     return alerts
 
 
-def process_csv(csv_path: str, output_dir: str = OUTPUT_DIR) -> str:
+def process_csv(csv_path: str, output_dir: str = OUTPUT_DIR, protect: bool = False) -> str:
     df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
 
     wb = Workbook()
@@ -136,6 +136,10 @@ def process_csv(csv_path: str, output_dir: str = OUTPUT_DIR) -> str:
 
     # Freeze header row
     ws.freeze_panes = "A2"
+
+    if protect:
+        ws.protection.sheet = True
+        ws.protection.selectLockedCells = False
 
     os.makedirs(output_dir, exist_ok=True)
     filename = os.path.splitext(os.path.basename(csv_path))[0]
