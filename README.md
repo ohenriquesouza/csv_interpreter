@@ -35,7 +35,7 @@ Just run `CSVInterpreter.exe` — no Python or dependencies required.
 Python 3.12+ is required. Install all dependencies with:
 
 ```bash
-pip install -r requiriments.txt
+pip install -r requirements.txt
 ```
 
 | Package | Version | Purpose |
