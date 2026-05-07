@@ -26,7 +26,7 @@ def _is_null(value: str) -> bool:
 
 def _find_id_col(df: pd.DataFrame) -> str | None:
     for col in df.columns:
-        if "unidade" in col.lower() and "produ" in col.lower():
+        if "id" in col.lower():
             return col
     return None
 
@@ -48,7 +48,7 @@ def _find_null_alerts(df: pd.DataFrame, threshold: int = 10) -> list[str]:
                 cols_with_issues.append(f"{col} ({null_count})")
         if cols_with_issues:
             alerts.append(
-                f"⚠️ Unidade de Producao {unit_id} apresentou registros vazios em: "
+                f"⚠️ {id_col} {unit_id} apresentou registros vazios em: "
                 f"{', '.join(cols_with_issues)}. Possível erro no recebimento dos dados."
             )
     return alerts
