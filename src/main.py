@@ -10,15 +10,71 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
-HEADER_FILL = PatternFill(start_color="00AD32", end_color="00AD32", fill_type="solid")
+DEFAULT_THEME = "00AD32"
+
 NULL_FILL = PatternFill(start_color="FFD7D7", end_color="FFD7D7", fill_type="solid")
-FOOTER_FILL = PatternFill(start_color="C9EAB8", end_color="C9EAB8", fill_type="solid")
+ALERT_FILL = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
 THIN = Side(style="thin")
 CELL_BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
 
-ALERT_FILL = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+# --- Theme utilities ---
 
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    h = hex_color.lstrip("#")
+    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+def _rgb_to_hex(r: int, g: int, b: int) -> str:
+    return f"{r:02X}{g:02X}{b:02X}"
+
+
+def _relative_luminance(r: int, g: int, b: int) -> float:
+    def _ch(x: int) -> float:
+        v = x / 255
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    return 0.2126 * _ch(r) + 0.7152 * _ch(g) + 0.0722 * _ch(b)
+
+
+def _lighten(r: int, g: int, b: int, amount: float) -> tuple[int, int, int]:
+    return (
+        min(255, int(r + (255 - r) * amount)),
+        min(255, int(g + (255 - g) * amount)),
+        min(255, int(b + (255 - b) * amount)),
+    )
+
+
+def _darken(r: int, g: int, b: int, amount: float) -> tuple[int, int, int]:
+    return (
+        max(0, int(r * (1 - amount))),
+        max(0, int(g * (1 - amount))),
+        max(0, int(b * (1 - amount))),
+    )
+
+
+def build_theme(hex_color: str) -> dict:
+    r, g, b = _hex_to_rgb(hex_color)
+    lum = _relative_luminance(r, g, b)
+
+    header_hex = _rgb_to_hex(r, g, b)
+
+    lr, lg, lb = _lighten(r, g, b, 0.72)
+    footer_hex = _rgb_to_hex(lr, lg, lb)
+
+    header_text = "FFFFFF" if lum < 0.35 else "1A1A1A"
+
+    dr, dg, db = _darken(r, g, b, 0.45)
+    footer_text = _rgb_to_hex(dr, dg, db)
+
+    return {
+        "header_fill": PatternFill(start_color=header_hex, end_color=header_hex, fill_type="solid"),
+        "footer_fill": PatternFill(start_color=footer_hex, end_color=footer_hex, fill_type="solid"),
+        "header_text": header_text,
+        "footer_text": footer_text,
+    }
+
+
+# --- Data helpers ---
 
 def _is_null(value: str) -> bool:
     return str(value).strip().lower() in ("", "nan", "none", "null", "$null$", "n/a", "na")
@@ -54,8 +110,14 @@ def _find_null_alerts(df: pd.DataFrame, threshold: int = 10) -> list[str]:
     return alerts
 
 
-def process_csv(csv_path: str, output_dir: str = OUTPUT_DIR, protect: bool = False) -> str:
+def process_csv(
+    csv_path: str,
+    output_dir: str = OUTPUT_DIR,
+    protect: bool = False,
+    theme_color: str = DEFAULT_THEME,
+) -> str:
     df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
+    theme = build_theme(theme_color)
 
     wb = Workbook()
     ws = wb.active
@@ -64,10 +126,10 @@ def process_csv(csv_path: str, output_dir: str = OUTPUT_DIR, protect: bool = Fal
     total_cols = len(df.columns)
 
     # --- Header row ---
-    header_font = Font(bold=True, color="FFFFFF", size=12)
+    header_font = Font(bold=True, color=theme["header_text"], size=12)
     for col_idx, col_name in enumerate(df.columns, start=1):
         cell = ws.cell(row=1, column=col_idx, value=col_name)
-        cell.fill = HEADER_FILL
+        cell.fill = theme["header_fill"]
         cell.font = header_font
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = CELL_BORDER
@@ -115,8 +177,8 @@ def process_csv(csv_path: str, output_dir: str = OUTPUT_DIR, protect: bool = Fal
             f"Empty cells: {null_count}  |  "
             f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         ),
-        FOOTER_FILL,
-        Font(bold=True, color="005C1A", size=11),
+        theme["footer_fill"],
+        Font(bold=True, color=theme["footer_text"], size=11),
     )
 
     alerts = _find_null_alerts(df)
@@ -134,7 +196,6 @@ def process_csv(csv_path: str, output_dir: str = OUTPUT_DIR, protect: bool = Fal
         max_len = max(len(str(col_name)), col_values.str.len().max()) + 4
         ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len, 50)
 
-    # Freeze header row
     ws.freeze_panes = "A2"
 
     if protect:

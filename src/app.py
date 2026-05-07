@@ -4,9 +4,9 @@ import sys
 import tempfile
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import colorchooser, filedialog, messagebox
 
-from main import process_csv
+from main import DEFAULT_THEME, process_csv
 
 
 def resource_path(filename: str) -> str:
@@ -25,8 +25,17 @@ def select_file(label: tk.Label, btn_process: tk.Button, state: dict) -> None:
         btn_process.config(state=tk.NORMAL)
 
 
+def pick_theme(state: dict, swatch: tk.Label) -> None:
+    initial = f"#{state['theme_color']}"
+    result = colorchooser.askcolor(color=initial, title="Selecionar cor do tema")
+    if result and result[1]:
+        hex_color = result[1].lstrip("#").upper()
+        state["theme_color"] = hex_color
+        swatch.config(bg=f"#{hex_color}")
+
+
 def run_processing(
-    csv_path: str, dest_dir: str, protect: bool,
+    csv_path: str, dest_dir: str, protect: bool, theme_color: str,
     btn_process: tk.Button, status: tk.Label,
 ) -> None:
     try:
@@ -34,7 +43,7 @@ def run_processing(
         tmp_csv = os.path.join(tmp_dir, os.path.basename(csv_path))
         shutil.copy2(csv_path, tmp_csv)
 
-        out_xlsx = process_csv(tmp_csv, output_dir=dest_dir, protect=protect)
+        out_xlsx = process_csv(tmp_csv, output_dir=dest_dir, protect=protect, theme_color=theme_color)
 
         status.config(text="Arquivo gerado com sucesso!", fg="#2e7d32")
         messagebox.showinfo("Concluído", f"Arquivo salvo em:\n{out_xlsx}")
@@ -60,7 +69,7 @@ def process(state: dict, protect_var: tk.BooleanVar, btn_process: tk.Button, sta
 
     thread = threading.Thread(
         target=run_processing,
-        args=(csv_path, dest_dir, protect_var.get(), btn_process, status),
+        args=(csv_path, dest_dir, protect_var.get(), state["theme_color"], btn_process, status),
         daemon=True,
     )
     thread.start()
@@ -77,22 +86,22 @@ def main() -> None:
     except Exception:
         pass
 
-    window_w, window_h = 420, 220
+    window_w, window_h = 420, 255
     screen_w = root.winfo_screenwidth()
     screen_h = root.winfo_screenheight()
     root.geometry(f"{window_w}x{window_h}+{(screen_w - window_w) // 2}+{(screen_h - window_h) // 2}")
 
-    state = {"csv_path": None}
+    state = {"csv_path": None, "theme_color": DEFAULT_THEME}
 
     tk.Label(root, text="CSV Interpreter", font=("Segoe UI", 14, "bold"),
-             bg="white", fg="#1a1a1a").pack(pady=(28, 4))
+             bg="white", fg="#1a1a1a").pack(pady=(24, 4))
 
     tk.Label(root, text="Selecione um arquivo CSV para gerar o relatório formatado.",
              font=("Segoe UI", 9), bg="white", fg="#555555").pack()
 
     file_label = tk.Label(root, text="Nenhum arquivo selecionado",
                           font=("Segoe UI", 9, "italic"), bg="white", fg="#aaaaaa")
-    file_label.pack(pady=(18, 6))
+    file_label.pack(pady=(14, 6))
 
     btn_select = tk.Button(
         root, text="Selecionar arquivo CSV",
@@ -103,6 +112,28 @@ def main() -> None:
     )
     btn_select.pack()
 
+    # --- Theme selector ---
+    theme_frame = tk.Frame(root, bg="white")
+    theme_frame.pack(pady=(10, 0))
+
+    swatch = tk.Label(
+        theme_frame,
+        bg=f"#{DEFAULT_THEME}",
+        width=2, relief="groove", cursor="hand2",
+    )
+    swatch.pack(side=tk.LEFT)
+    swatch.bind("<Button-1>", lambda e: pick_theme(state, swatch))
+
+    btn_theme = tk.Button(
+        theme_frame, text="Selecionar tema",
+        font=("Segoe UI", 9), bg="white", fg="#2E75B6",
+        activebackground="white", activeforeground="#1f5490",
+        relief=tk.FLAT, cursor="hand2", borderwidth=0,
+        command=lambda: pick_theme(state, swatch),
+    )
+    btn_theme.pack(side=tk.LEFT, padx=(6, 0))
+
+    # --- Process / protect ---
     protect_var = tk.BooleanVar(value=False)
 
     action_frame = tk.Frame(root, bg="white")
