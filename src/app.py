@@ -35,7 +35,7 @@ def pick_theme(state: dict, swatch: tk.Label) -> None:
 
 
 def run_processing(
-    csv_path: str, dest_dir: str, protect: bool, theme_color: str,
+    csv_path: str, dest_dir: str, protect: bool, theme_color: str, null_treatment: str,
     btn_process: tk.Button, status: tk.Label,
 ) -> None:
     try:
@@ -43,7 +43,13 @@ def run_processing(
         tmp_csv = os.path.join(tmp_dir, os.path.basename(csv_path))
         shutil.copy2(csv_path, tmp_csv)
 
-        out_xlsx = process_csv(tmp_csv, output_dir=dest_dir, protect=protect, theme_color=theme_color)
+        out_xlsx = process_csv(
+            tmp_csv,
+            output_dir=dest_dir,
+            protect=protect,
+            theme_color=theme_color,
+            null_treatment=null_treatment,
+        )
 
         status.config(text="Arquivo gerado com sucesso!", fg="#2e7d32")
         messagebox.showinfo("Concluído", f"Arquivo salvo em:\n{out_xlsx}")
@@ -55,7 +61,10 @@ def run_processing(
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def process(state: dict, protect_var: tk.BooleanVar, btn_process: tk.Button, status: tk.Label) -> None:
+def process(
+    state: dict, protect_var: tk.BooleanVar, null_var: tk.StringVar,
+    btn_process: tk.Button, status: tk.Label,
+) -> None:
     csv_path = state.get("csv_path")
     if not csv_path:
         return
@@ -69,7 +78,11 @@ def process(state: dict, protect_var: tk.BooleanVar, btn_process: tk.Button, sta
 
     thread = threading.Thread(
         target=run_processing,
-        args=(csv_path, dest_dir, protect_var.get(), state["theme_color"], btn_process, status),
+        args=(
+            csv_path, dest_dir, protect_var.get(),
+            state["theme_color"], null_var.get(),
+            btn_process, status,
+        ),
         daemon=True,
     )
     thread.start()
@@ -86,7 +99,7 @@ def main() -> None:
     except Exception:
         pass
 
-    window_w, window_h = 420, 255
+    window_w, window_h = 420, 295
     screen_w = root.winfo_screenwidth()
     screen_h = root.winfo_screenheight()
     root.geometry(f"{window_w}x{window_h}+{(screen_w - window_w) // 2}+{(screen_h - window_h) // 2}")
@@ -94,14 +107,14 @@ def main() -> None:
     state = {"csv_path": None, "theme_color": DEFAULT_THEME}
 
     tk.Label(root, text="CSV Interpreter", font=("Segoe UI", 14, "bold"),
-             bg="white", fg="#1a1a1a").pack(pady=(24, 4))
+             bg="white", fg="#1a1a1a").pack(pady=(20, 4))
 
     tk.Label(root, text="Selecione um arquivo CSV para gerar o relatório formatado.",
              font=("Segoe UI", 9), bg="white", fg="#555555").pack()
 
     file_label = tk.Label(root, text="Nenhum arquivo selecionado",
                           font=("Segoe UI", 9, "italic"), bg="white", fg="#aaaaaa")
-    file_label.pack(pady=(14, 6))
+    file_label.pack(pady=(12, 6))
 
     btn_select = tk.Button(
         root, text="Selecionar arquivo CSV",
@@ -133,6 +146,22 @@ def main() -> None:
     )
     btn_theme.pack(side=tk.LEFT, padx=(6, 0))
 
+    # --- Null treatment ---
+    null_var = tk.StringVar(value="na")
+
+    null_frame = tk.Frame(root, bg="white")
+    null_frame.pack(pady=(10, 0))
+
+    tk.Label(null_frame, text="Células vazias:",
+             font=("Segoe UI", 9), bg="white", fg="#555555").pack(side=tk.LEFT)
+
+    for label, val in [("N/A", "na"), ("Vazio", "vazio"), ("Zero", "zero")]:
+        tk.Radiobutton(
+            null_frame, text=label, variable=null_var, value=val,
+            font=("Segoe UI", 9), bg="white", activebackground="white",
+            cursor="hand2",
+        ).pack(side=tk.LEFT, padx=(8, 0))
+
     # --- Process / protect ---
     protect_var = tk.BooleanVar(value=False)
 
@@ -144,7 +173,7 @@ def main() -> None:
         font=("Segoe UI", 10), bg="#e0e0e0", fg="#aaaaaa",
         relief=tk.FLAT, padx=16, pady=6, cursor="hand2",
         state=tk.DISABLED,
-        command=lambda: process(state, protect_var, btn_process, status_label),
+        command=lambda: process(state, protect_var, null_var, btn_process, status_label),
     )
     btn_process.pack(side=tk.LEFT)
 

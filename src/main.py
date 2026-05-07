@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime
 
 import pandas as pd
@@ -16,6 +17,9 @@ NULL_FILL = PatternFill(start_color="FFD7D7", end_color="FFD7D7", fill_type="sol
 ALERT_FILL = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
 THIN = Side(style="thin")
 CELL_BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+
+_IMAGE_NAME_KEYWORDS = {"imagem", "foto", "image", "photo", "figura", "img", "picture", "thumb", "thumbnail"}
+_IMAGE_EXT_RE = re.compile(r'\.(jpg|jpeg|png|gif|webp|bmp|tiff|svg)(\?.*)?$', re.IGNORECASE)
 
 
 # --- Theme utilities ---
@@ -80,6 +84,23 @@ def _is_null(value: str) -> bool:
     return str(value).strip().lower() in ("", "nan", "none", "null", "$null$", "n/a", "na")
 
 
+def _is_image_col(col_name: str, series: pd.Series) -> bool:
+    if any(kw in col_name.lower() for kw in _IMAGE_NAME_KEYWORDS):
+        return True
+    non_null = series[~series.apply(_is_null)]
+    if len(non_null) == 0:
+        return False
+    return non_null.apply(lambda v: bool(_IMAGE_EXT_RE.search(str(v)))).mean() > 0.5
+
+
+def _reorder_image_cols(df: pd.DataFrame) -> pd.DataFrame:
+    image_cols = [col for col in df.columns if _is_image_col(col, df[col])]
+    if not image_cols:
+        return df
+    other_cols = [col for col in df.columns if col not in image_cols]
+    return df[other_cols + image_cols]
+
+
 def _find_id_col(df: pd.DataFrame) -> str | None:
     for col in df.columns:
         if "id" in col.lower():
@@ -115,8 +136,10 @@ def process_csv(
     output_dir: str = OUTPUT_DIR,
     protect: bool = False,
     theme_color: str = DEFAULT_THEME,
+    null_treatment: str = "na",
 ) -> str:
     df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
+    df = _reorder_image_cols(df)
     theme = build_theme(theme_color)
 
     wb = Workbook()
@@ -142,10 +165,15 @@ def process_csv(
         for col_idx, value in enumerate(row, start=1):
             cell = ws.cell(row=row_idx, column=col_idx)
             if _is_null(value):
-                cell.value = "N/A"
-                cell.fill = NULL_FILL
-                cell.font = null_font
                 null_count += 1
+                if null_treatment == "na":
+                    cell.value = "N/A"
+                    cell.fill = NULL_FILL
+                    cell.font = null_font
+                elif null_treatment == "zero":
+                    cell.value = 0
+                else:  # "vazio"
+                    cell.value = ""
             else:
                 cell.value = value
             cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
