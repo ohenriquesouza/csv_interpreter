@@ -20,7 +20,7 @@ Converts messy CSV files into clean, formatted Excel spreadsheets (.xlsx).
 
 ## 🖥️ Desktop App (recommended)
 
-Just run `CSVInterpreter.exe` — no Python or dependencies required.
+Extract the release folder and run `CSVInterpreter.exe` inside it — no Python installation required. Keep the `_internal` folder next to the executable; it contains the bundled dependencies. This version opens faster because it does not extract dependencies on every launch.
 
 ![CSV Interpreter UI](img/UI.png)
 
@@ -82,3 +82,23 @@ python src/main.py
 ```
 
 Output files will be saved to the `output/` folder.
+
+### Build the Windows application
+
+From PowerShell, run:
+
+```powershell
+.\build.ps1
+```
+
+The script creates an isolated `.venv-build` environment and installs only the required dependencies, so unrelated packages from your system are not bundled. The application loads the spreadsheet engine only when processing a file.
+
+The recommended build is `dist/CSVInterpreter/CSVInterpreter.exe`. Distribute the entire `dist/CSVInterpreter/` folder, for example as a ZIP; copying only the executable will not work.
+
+For a standalone file instead, run:
+
+```powershell
+.\build.ps1 -OneFile
+```
+
+This produces `dist/CSVInterpreter.exe`. It is convenient to share, but extracts dependencies at startup and therefore opens more slowly than the folder version.

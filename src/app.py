@@ -6,7 +6,7 @@ import threading
 import tkinter as tk
 from tkinter import colorchooser, filedialog, messagebox
 
-from main import DEFAULT_THEME, process_csv
+from settings import DEFAULT_THEME
 
 
 def resource_path(filename: str) -> str:
@@ -41,7 +41,11 @@ def run_processing(
     csv_path: str, dest_dir: str, protect: bool, theme_color: str, null_treatment: str,
     btn_process: tk.Button, status: tk.Label,
 ) -> None:
+    tmp_dir = None
     try:
+        # Load the spreadsheet engine in the worker only when it is needed.
+        from main import process_csv
+
         tmp_dir = tempfile.mkdtemp()
         tmp_csv = os.path.join(tmp_dir, os.path.basename(csv_path))
         shutil.copy2(csv_path, tmp_csv)
@@ -61,7 +65,8 @@ def run_processing(
         messagebox.showerror("Erro", str(exc))
     finally:
         btn_process.config(state=tk.NORMAL)
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        if tmp_dir is not None:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def process(

@@ -7,11 +7,11 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
+from settings import DEFAULT_THEME
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
-
-DEFAULT_THEME = "00AD32"
 
 NULL_FILL = PatternFill(start_color="FFD7D7", end_color="FFD7D7", fill_type="solid")
 ALERT_FILL = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
