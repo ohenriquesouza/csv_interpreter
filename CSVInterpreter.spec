@@ -12,7 +12,9 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    # CSV input uses the standard library; image columns contain links only.
+    # Pillow is needed to build icons, but not to run this application.
+    excludes=['pandas', 'numpy', 'PIL'],
     noarchive=False,
     optimize=0,
 )

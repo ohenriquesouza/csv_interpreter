@@ -1,8 +1,8 @@
+import csv
 import os
 import re
 from datetime import datetime
 
-import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -84,45 +84,105 @@ def _is_null(value: str) -> bool:
     return str(value).strip().lower() in ("", "nan", "none", "null", "$null$", "n/a", "na")
 
 
-def _is_image_col(col_name: str, series: pd.Series) -> bool:
+def _read_csv(csv_path: str) -> tuple[list[str], list[list[str]]]:
+    # Match the previous reader's text handling, including UTF-8 BOMs, quoted
+    # newlines, blank lines, duplicate headers and missing trailing fields.
+    csv.field_size_limit(2**31 - 1)
+    with open(csv_path, encoding="utf-8-sig", newline="") as source:
+        record_lines = []
+
+        def lines():
+            for line in source:
+                record_lines.append(line)
+                yield line
+
+        def records():
+            reader = csv.reader(lines(), strict=True)
+            for row in reader:
+                blank = not "".join(record_lines).strip()
+                record_lines.clear()
+                if not blank:
+                    yield row
+
+        rows = records()
+        raw_headers = next(rows, None)
+        if raw_headers is None:
+            raise ValueError("O arquivo CSV está vazio ou não contém colunas.")
+
+        headers = [name or f"Unnamed: {i}" for i, name in enumerate(raw_headers)]
+        reserved = set(headers)
+        used = set()
+        # Named columns take precedence over generated names for empty headers.
+        for i in sorted(range(len(headers)), key=lambda i: not bool(raw_headers[i])):
+            name = headers[i]
+            if name in used:
+                suffix = 1
+                while f"{name}.{suffix}" in reserved or f"{name}.{suffix}" in used:
+                    suffix += 1
+                name = f"{name}.{suffix}"
+            headers[i] = name
+            used.add(name)
+
+        data = []
+        index_columns = None
+        for row in rows:
+            if index_columns is None:
+                # The previous reader treated extra leading fields in the first
+                # record as an implicit index, which is not exported to Excel.
+                index_columns = max(0, len(row) - len(headers))
+            expected = len(headers) + index_columns
+            if len(row) > expected:
+                raise ValueError(
+                    f"Linha CSV com {len(row)} campos; eram esperados {expected}."
+                )
+            row += [""] * (expected - len(row))
+            data.append(row[index_columns:])
+    return headers, data
+
+
+def _is_image_col(col_name: str, values) -> bool:
     if any(kw in col_name.lower() for kw in _IMAGE_NAME_KEYWORDS):
         return True
-    non_null = series[~series.apply(_is_null)]
-    if len(non_null) == 0:
-        return False
-    return non_null.apply(lambda v: bool(_IMAGE_EXT_RE.search(str(v)))).mean() > 0.5
+    non_null = [value for value in values if not _is_null(value)]
+    return bool(non_null) and sum(
+        bool(_IMAGE_EXT_RE.search(value)) for value in non_null
+    ) > len(non_null) / 2
 
 
-def _reorder_image_cols(df: pd.DataFrame) -> pd.DataFrame:
-    image_cols = [col for col in df.columns if _is_image_col(col, df[col])]
+def _reorder_image_cols(
+    headers: list[str], rows: list[list[str]],
+) -> tuple[list[str], list[list[str]]]:
+    image_cols = [
+        i for i, name in enumerate(headers)
+        if _is_image_col(name, (row[i] for row in rows))
+    ]
     if not image_cols:
-        return df
-    other_cols = [col for col in df.columns if col not in image_cols]
-    return df[other_cols + image_cols]
+        return headers, rows
+    image_set = set(image_cols)
+    order = [i for i in range(len(headers)) if i not in image_set] + image_cols
+    return [headers[i] for i in order], [[row[i] for i in order] for row in rows]
 
 
-def _find_id_col(df: pd.DataFrame) -> str | None:
-    for col in df.columns:
-        if "id" in col.lower():
-            return col
-    return None
-
-
-def _find_null_alerts(df: pd.DataFrame, threshold: int = 10) -> list[str]:
-    id_col = _find_id_col(df)
-    if id_col is None:
+def _find_null_alerts(
+    headers: list[str], rows: list[list[str]], threshold: int = 10,
+) -> list[str]:
+    id_index = next((i for i, name in enumerate(headers) if "id" in name.lower()), None)
+    if id_index is None:
         return []
 
+    id_col = headers[id_index]
+    counts_by_id = {}
+    for row in rows:
+        counts = counts_by_id.setdefault(row[id_index], [0] * len(headers))
+        for i, value in enumerate(row):
+            if i != id_index and _is_null(value):
+                counts[i] += 1
     alerts = []
-
-    for unit_id, group in df.groupby(id_col, sort=False):
-        cols_with_issues = []
-        for col in df.columns:
-            if col == id_col:
-                continue
-            null_count = group[col].apply(_is_null).sum()
-            if null_count > threshold:
-                cols_with_issues.append(f"{col} ({null_count})")
+    for unit_id, counts in counts_by_id.items():
+        cols_with_issues = [
+            f"{name} ({counts[i]})" for i, name in enumerate(headers)
+            if i != id_index and counts[i] > threshold
+        ]
         if cols_with_issues:
             alerts.append(
                 f"⚠️ {id_col} {unit_id} apresentou registros vazios em: "
@@ -138,19 +198,19 @@ def process_csv(
     theme_color: str = DEFAULT_THEME,
     null_treatment: str = "na",
 ) -> str:
-    df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
-    df = _reorder_image_cols(df)
+    headers, rows = _read_csv(csv_path)
+    headers, rows = _reorder_image_cols(headers, rows)
     theme = build_theme(theme_color)
 
     wb = Workbook()
     ws = wb.active
     ws.title = os.path.splitext(os.path.basename(csv_path))[0][:31]
 
-    total_cols = len(df.columns)
+    total_cols = len(headers)
 
     # --- Header row ---
     header_font = Font(bold=True, color=theme["header_text"], size=12)
-    for col_idx, col_name in enumerate(df.columns, start=1):
+    for col_idx, col_name in enumerate(headers, start=1):
         cell = ws.cell(row=1, column=col_idx, value=col_name)
         cell.fill = theme["header_fill"]
         cell.font = header_font
@@ -161,7 +221,7 @@ def process_csv(
     # --- Data rows ---
     null_font = Font(color="999999", italic=True)
     null_count = 0
-    for row_idx, row in enumerate(df.itertuples(index=False), start=2):
+    for row_idx, row in enumerate(rows, start=2):
         for col_idx, value in enumerate(row, start=1):
             cell = ws.cell(row=row_idx, column=col_idx)
             if _is_null(value):
@@ -180,7 +240,7 @@ def process_csv(
             cell.border = CELL_BORDER
 
     # --- Footer row ---
-    footer_row = len(df) + 2
+    footer_row = len(rows) + 2
 
     def _write_footer_row(row_idx: int, text: str, fill: PatternFill, font: Font) -> None:
         ws.merge_cells(
@@ -200,7 +260,7 @@ def process_csv(
     _write_footer_row(
         footer_row,
         (
-            f"Total rows: {len(df)}  |  "
+            f"Total rows: {len(rows)}  |  "
             f"Columns: {total_cols}  |  "
             f"Empty cells: {null_count}  |  "
             f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
@@ -209,7 +269,7 @@ def process_csv(
         Font(bold=True, color=theme["footer_text"], size=11),
     )
 
-    alerts = _find_null_alerts(df)
+    alerts = _find_null_alerts(headers, rows)
     for i, alert_msg in enumerate(alerts, start=1):
         _write_footer_row(
             footer_row + i,
@@ -219,9 +279,9 @@ def process_csv(
         )
 
     # --- Column widths ---
-    for col_idx, col_name in enumerate(df.columns, start=1):
-        col_values = df.iloc[:, col_idx - 1].astype(str)
-        max_len = max(len(str(col_name)), col_values.str.len().max()) + 4
+    for col_idx, col_name in enumerate(headers, start=1):
+        longest_value = max((len(row[col_idx - 1]) for row in rows), default=0)
+        max_len = max(len(col_name), longest_value) + 4
         ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len, 50)
 
     ws.freeze_panes = "A2"

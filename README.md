@@ -60,7 +60,6 @@ pip install -r requirements.txt
 
 | Package | Version | Purpose |
 |---|---|---|
-| pandas | 2.2.3 | CSV reading and data manipulation |
 | openpyxl | 3.1.5 | Excel file generation and formatting |
 | pillow | 12.2.0 | Icon conversion (build only) |
 | pyinstaller | 6.20.0 | .exe packaging (build only) |
@@ -92,6 +91,8 @@ From PowerShell, run:
 ```
 
 The script creates an isolated `.venv-build` environment and installs only the required dependencies, so unrelated packages from your system are not bundled. The application loads the spreadsheet engine only when processing a file.
+
+CSV reading uses Python's built-in `csv` module. Pandas, NumPy and Pillow are excluded from the executable; Pillow is used only during the build. Image columns remain links, with the same automatic ordering and spreadsheet formatting.
 
 The recommended build is `dist/CSVInterpreter/CSVInterpreter.exe`. Distribute the entire `dist/CSVInterpreter/` folder, for example as a ZIP; copying only the executable will not work.
 
