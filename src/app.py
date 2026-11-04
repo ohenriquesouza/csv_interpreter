@@ -10,7 +10,10 @@ from main import DEFAULT_THEME, process_csv
 
 
 def resource_path(filename: str) -> str:
-    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    base = getattr(
+        sys, "_MEIPASS",
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "img"),
+    )
     return os.path.join(base, filename)
 
 
@@ -95,7 +98,7 @@ def main() -> None:
     root.configure(bg="white")
 
     try:
-        root.iconbitmap(resource_path("agrosynlogo.ico"))
+        root.iconbitmap(resource_path("CSVinterpreter.ico"))
     except Exception:
         pass
 
